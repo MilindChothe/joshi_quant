@@ -1,0 +1,103 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>20 SMA Intraday Option Selling</title>
+<style>
+body{font-family:Arial;margin:0;background:#0f1420;color:#e8ecf3}
+.wrap{max-width:1000px;margin:auto;padding:16px}
+.card{background:#1a2233;border-radius:10px;padding:14px;margin:10px 0}
+h2{margin:6px 0}label{font-size:12px;color:#9fb0c9}
+input,select{width:100%;padding:7px;margin:3px 0 9px;border-radius:6px;border:1px solid #33405c;background:#0f1420;color:#fff}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:700px){.grid{grid-template-columns:1fr 1fr}}
+button{padding:9px 14px;border-radius:8px;border:0;cursor:pointer;font-weight:bold}
+.start{background:#22c55e}.stop{background:#ef4444;color:#fff}.sq{background:#f59e0b}.login{background:#3b82f6;color:#fff}
+table{width:100%;font-size:13px;border-collapse:collapse}td,th{border-bottom:1px solid #2b3650;padding:6px;text-align:left}
+.badge{padding:3px 10px;border-radius:20px;font-weight:bold}.LONG{background:#16a34a}.SHORT{background:#dc2626}.FLAT{background:#475569}
+.small{font-size:12px;color:#9fb0c9}pre{background:#0b0f1a;padding:10px;border-radius:8px;max-height:220px;overflow:auto;font-size:12px}
+</style></head>
+<body><div class="wrap">
+<h2>20 SMA Intraday Option Selling <span class="small">NIFTY 5-min | Kotak Neo live + paper</span></h2>
+<div class="card">Status: <b id="run">-</b> | Mode: <b id="mode">-</b> | Signal: <span id="sig" class="badge FLAT">-</span>
+| Spot: <b id="spot">-</b> | SMA: <b id="sma">-</b> | Day P/L: <b id="pnl">-</b> | Expiry: <b id="exp">-</b> | IP: <b id="ip">-</b> | Funds: <b id="funds">-</b>
+<div class="small" id="note"></div>
+<div style="margin-top:8px">
+<button class="start" onclick="post('/api/start')">▶ Start</button>
+<button class="stop" onclick="post('/api/stop')">⏹ Stop</button>
+<button class="sq" onclick="post('/api/squareoff')">Square-off</button>
+<button onclick="save()">💾 Save settings</button>
+</div></div>
+
+<div class="card"><h3>Mode / Time / Strategy</h3><div class="grid">
+<div><label>MODE (paper/live)</label><select id="MODE"><option>paper</option><option>live</option></select></div>
+<div><label>Console only</label><select id="CONSOLE_ONLY"><option>False</option><option>True</option></select></div>
+<div><label>Entry time</label><input id="ENTRY_TIME" value="09:16"></div>
+<div><label>Exit time</label><input id="EXIT_TIME" value="15:10"></div>
+<div><label>SMA period</label><input id="SMA_PERIOD" value="20"></div>
+<div><label>Threshold % (0.1)</label><input id="SMA_THRESHOLD_PCT" value="0.1"></div>
+<div><label>Product (MIS/NRML)</label><select id="PRODUCT"><option>MIS</option><option>NRML</option></select></div>
+<div><label>Short premium LEG1 (50)</label><input id="SHORT_PREMIUM_1" value="50"></div>
+<div><label>SL points LEG1 (15)</label><input id="SL_POINTS_1" value="15"></div>
+<div><label>Short premium LEG2 (30)</label><input id="SHORT_PREMIUM_2" value="30"></div>
+<div><label>SL % LEG2 (25)</label><input id="SL_PCT_2" value="25"></div>
+<div><label>Lots per leg</label><input id="LOTS" value="1"></div>
+<div><label>Lot qty</label><input id="NIFTY_LOT_QTY" value="75"></div>
+<div><label>Expiry weekday (1=Tue,3=Thu)</label><input id="EXPIRY_WEEKDAY" value="1"></div>
+<div><label>Use NEXT weekly (True)</label><select id="USE_NEXT_WEEKLY"><option>True</option><option>False</option></select></div>
+<div><label>LTP refresh sec (45, min 15)</label><input id="LTP_REFRESH_SEC" value="45"></div>
+</div></div>
+
+<div class="card"><h3>Kotak Neo + Telegram credentials (.env)</h3><div class="grid">
+<div><label>Consumer Key (api key)</label><input id="KOTAK_CONSUMER_KEY" type="password"></div>
+<div><label>Consumer Secret (api secret)</label><input id="KOTAK_CONSUMER_SECRET" type="password"></div>
+<div><label>Mobile (+91...)</label><input id="KOTAK_MOBILE_NUMBER"></div>
+<div><label>UCC</label><input id="KOTAK_UCC"></div>
+<div><label>MPIN</label><input id="KOTAK_MPIN" type="password"></div>
+<div><label>TOTP secret (auto) or leave blank</label><input id="KOTAK_TOTP_SECRET" type="password"></div>
+<div><label>Manual TOTP code (for login)</label><input id="totp" placeholder="6-digit"></div>
+<div><label>Telegram bot token</label><input id="TELEGRAM_BOT_TOKEN" type="password"></div>
+<div><label>Telegram chat id</label><input id="TELEGRAM_CHAT_ID"></div>
+</div>
+<button class="login" onclick="kotakLogin()">Kotak Login</button>
+<span class="small" id="kotakmsg"></span></div>
+
+<div class="card"><h3>Profit / Loss</h3>
+<div class="grid" style="grid-template-columns:1fr 1fr 1fr 1fr">
+<div>Profit/Loss<br><b id="s_net">-</b></div>
+<div>Unrealised P/L<br><b id="s_un">-</b></div>
+<div>Realised P/L<br><b id="s_re">-</b></div>
+<div>Net traded value<br><b id="s_tv">-</b></div>
+</div></div>
+<div class="card"><h3>Today's positions (open + closed)</h3><table><thead><tr><th>Name</th><th>Type</th><th>Qty</th><th>Avg.cost</th><th>LTP</th><th>Entry time</th><th>Exit time</th><th>Profit/loss</th></tr></thead><tbody id="allposs"></tbody></table>
+<div class="small">LTP as of <span id="ltpt">-</span> | Telegram last: <span id="tg">-</span> (auto every 15 min)</div></div>
+<div class="card"><h3>Logs</h3><pre id="logs"></pre></div>
+</div>
+<script>
+const F=["MODE","ENTRY_TIME","EXIT_TIME","SMA_PERIOD","SMA_THRESHOLD_PCT","PRODUCT","SHORT_PREMIUM_1","SL_POINTS_1","SHORT_PREMIUM_2","SL_PCT_2","LOTS","NIFTY_LOT_QTY","EXPIRY_WEEKDAY","USE_NEXT_WEEKLY","LTP_REFRESH_SEC","CONSOLE_ONLY","KOTAK_CONSUMER_KEY","KOTAK_CONSUMER_SECRET","KOTAK_MOBILE_NUMBER","KOTAK_UCC","KOTAK_MPIN","KOTAK_TOTP_SECRET","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID"];
+async function refresh(){const r=await fetch('/api/status');const j=await r.json();
+document.getElementById('run').innerText=j.state.running?'RUNNING':'STOPPED';
+document.getElementById('mode').innerText=j.state.mode;
+const s=document.getElementById('sig');s.innerText=j.state.signal;s.className='badge '+j.state.signal;
+document.getElementById('spot').innerText=j.state.spot;document.getElementById('sma').innerText=j.state.sma;
+document.getElementById('pnl').innerText=j.state.day_pnl;document.getElementById('exp').innerText=j.state.expiry||'-';
+document.getElementById('ip').innerText=(j.state.ip_public||'-')+(j.state.ip_local?' / '+j.state.ip_local:'');
+document.getElementById('funds').innerText=j.state.funds_summary||'-';
+document.getElementById('note').innerText=j.state.note||'';document.getElementById('tg').innerText=j.state.last_telegram||'-';
+document.getElementById('ltpt').innerText=j.state.ltp_time||'-';
+document.getElementById('kotakmsg').innerText=(j.state.kotak_logged_in?'LOGGED-IN ':'')+(j.state.kotak_msg||'')+(j.state.funds_summary?' | '+j.state.funds_summary:'');
+const pc=v=>`<span style="color:${v>=0?'#22c55e':'#ef4444'}">${v>=0?'+':''}${v}</span>`;
+if(j.summary){document.getElementById('s_net').innerHTML=pc(j.summary.net);document.getElementById('s_un').innerHTML=pc(j.summary.unrealised);document.getElementById('s_re').innerHTML=pc(j.summary.realised);document.getElementById('s_tv').innerHTML=pc(j.summary.traded_value);}
+const rows=[];
+(j.state.positions||[]).forEach(p=>{
+  const oid=p.broker_order_id?` oid:${p.broker_order_id}`:'';
+  const sloid=p.sl_order_id?` sl:${p.sl_order_id}`:'';
+  rows.push(`<tr><td>${p.symbol}</td><td>OPEN ${p.tag||''}${oid}${sloid}</td><td>${p.qty}</td><td>${p.entry}</td><td>${p.ltp}${p.live_ltp===false?' *':''}</td><td>${p.entry_time||p.time||'-'}</td><td>-</td><td>${pc(p.pnl)}</td></tr>`);
+});
+(j.state.closed||[]).forEach(p=>rows.push(`<tr><td>${p.symbol}</td><td>CLOSED ${p.exit_reason||''}</td><td>0</td><td>${p.entry}</td><td>${p.exit}</td><td>${p.entry_time||p.time||'-'}</td><td>${p.exit_time||'-'}</td><td>${pc(p.realized)}</td></tr>`));
+document.getElementById('allposs').innerHTML=rows.join('')||'<tr><td colspan=8>No trades today</td></tr>';
+document.getElementById('logs').innerText=(j.state.logs||[]).join('\n');
+F.forEach(k=>{if(j.cfg[k]!==undefined && document.activeElement.id!==k){const el=document.getElementById(k);if(el&&el.id!=='totp')el.value=j.cfg[k];}});}
+async function post(u,b){await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});refresh();}
+async function save(){const o={};F.filter(k=>k!=='totp').forEach(k=>o[k]=document.getElementById(k).value);await post('/api/save',o);alert('saved to .env');}
+async function kotakLogin(){const o={totp:document.getElementById('totp').value};["KOTAK_CONSUMER_KEY","KOTAK_CONSUMER_SECRET","KOTAK_MOBILE_NUMBER","KOTAK_UCC","KOTAK_MPIN","KOTAK_TOTP_SECRET"].forEach(k=>o[k]=document.getElementById(k).value);const r=await fetch('/api/kotak_login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});alert((await r.json()).msg||'done');refresh();}
+refresh();setInterval(refresh,1000);
+</script></body></html>
